@@ -42,12 +42,41 @@ def load_data(uploaded_file=None):
     file = uploaded_file if uploaded_file is not None else DATA_FILE
     fact = pd.read_excel(file, sheet_name="FactServicios")
     dim = pd.read_excel(file, sheet_name="DimConductores")
-    # clean basic fields
+
+    # Normaliza nombres de columnas para que funcione aunque el Excel venga con nombres distintos
+    alias_map = {
+        "Terminal Origen": "Terminal",
+        "Estado Cobertura": "Estado",
+        "Conductor Titular": "Conductor",
+        "Hora Partida": "Hora",
+    }
+    for original, standard in alias_map.items():
+        if standard not in fact.columns and original in fact.columns:
+            fact[standard] = fact[original]
+
+    if "Terminal" not in fact.columns:
+        fact["Terminal"] = "Sin dato"
+    if "Estado" not in fact.columns:
+        fact["Estado"] = "Cubierto"
+    if "Conductor" not in fact.columns:
+        fact["Conductor"] = "Sin dato"
+
+    # Limpieza básica
     for col in ["Terminal", "Estado", "Conductor", "Franja Horaria"]:
         if col in fact.columns:
             fact[col] = fact[col].fillna("Sin dato").astype(str)
+
+    # Si el conductor aparece como Sin Cubrir, también marcamos el estado como Sin Cubrir
+    fact.loc[fact["Conductor"].str.lower().str.contains("sin cubrir", na=False), "Estado"] = "Sin Cubrir"
+
     if "Hora Bucket" in fact.columns:
         fact["Hora Bucket"] = fact["Hora Bucket"].astype(str).str.slice(0,5)
+    elif "Hora" in fact.columns:
+        fact["Hora Bucket"] = pd.to_datetime(fact["Hora"], errors="coerce").dt.strftime("%H:00").fillna("Sin dato")
+
+    if "Franja Horaria" not in fact.columns:
+        fact["Franja Horaria"] = "Sin dato"
+
     return fact, dim
 
 with st.sidebar:
